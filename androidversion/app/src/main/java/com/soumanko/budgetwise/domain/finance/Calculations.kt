@@ -4,26 +4,6 @@ import com.soumanko.budgetwise.data.model.Transaction
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-data class MonthlyStats(
-    val totalIncome: BigDecimal,
-    val totalExpenses: BigDecimal,
-    val netSavings: BigDecimal,
-    val savingsRate: BigDecimal,
-    val transactionCount: Int
-)
-
-data class CategorySpending(
-    val category: String,
-    val amount: BigDecimal,
-    val percentage: BigDecimal,
-    val count: Int
-)
-
-data class DailySpending(
-    val date: String,
-    val amount: BigDecimal,
-    val income: BigDecimal
-)
 
 object Calculations {
     private val HUNDRED = BigDecimal("100")

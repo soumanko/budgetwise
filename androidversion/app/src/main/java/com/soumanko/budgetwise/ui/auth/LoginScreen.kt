@@ -12,6 +12,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
+    onNavigateToSignup: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -68,6 +70,25 @@ fun LoginScreen(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
             } else {
                 Text("Login")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(onClick = {
+            viewModel.resetState()
+            onNavigateToForgotPassword()
+        }) {
+            Text("Forgot your password?")
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Don't have an account? ", style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = {
+                viewModel.resetState()
+                onNavigateToSignup()
+            }) {
+                Text("Sign up")
             }
         }
     }

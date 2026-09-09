@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -290,7 +291,7 @@ fun TransactionFormScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = !isSubmitting,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (type == "income") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    containerColor = if (type == "income") Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
                 )
             ) {
                 Text(if (isSubmitting) "Saving..." else "Save Transaction")

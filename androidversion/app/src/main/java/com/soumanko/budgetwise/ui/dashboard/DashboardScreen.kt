@@ -13,12 +13,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.soumanko.budgetwise.domain.finance.toINR
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Person
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToBudgets: () -> Unit,
+    onNavigateToRecurring: () -> Unit,
+    onNavigateToSavingsGoals: () -> Unit,
+    onNavigateToAnalytics: () -> Unit,
+    onNavigateToProfile: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -27,8 +35,8 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("BudgetWise") },
                 actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout")
+                    IconButton(onClick = onNavigateToProfile) {
+                        Icon(Icons.Filled.Person, contentDescription = "Profile")
                     }
                 }
             )
@@ -60,7 +68,14 @@ fun DashboardScreen(
                     }
                 }
                 is DashboardUiState.Success -> {
-                    DashboardContent(state = state)
+                    DashboardContent(
+                        state = state,
+                        onNavigateToBudgets = onNavigateToBudgets,
+                        onNavigateToRecurring = onNavigateToRecurring,
+                        onNavigateToSavingsGoals = onNavigateToSavingsGoals,
+                        onNavigateToAnalytics = onNavigateToAnalytics,
+                        onNavigateToProfile = onNavigateToProfile
+                    )
                 }
             }
         }
@@ -68,7 +83,14 @@ fun DashboardScreen(
 }
 
 @Composable
-fun DashboardContent(state: DashboardUiState.Success) {
+fun DashboardContent(
+    state: DashboardUiState.Success,
+    onNavigateToBudgets: () -> Unit,
+    onNavigateToRecurring: () -> Unit,
+    onNavigateToSavingsGoals: () -> Unit,
+    onNavigateToAnalytics: () -> Unit,
+    onNavigateToProfile: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -81,18 +103,38 @@ fun DashboardContent(state: DashboardUiState.Success) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text("Total Balance", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("$${state.balance}", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
+                    Text(state.balance.toINR(), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }
         
+        // Quick Actions
+        item {
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    AssistChip(onClick = onNavigateToBudgets, label = { Text("Budgets") })
+                }
+                item {
+                    AssistChip(onClick = onNavigateToRecurring, label = { Text("Recurring") })
+                }
+                item {
+                    AssistChip(onClick = onNavigateToSavingsGoals, label = { Text("Goals") })
+                }
+                item {
+                    AssistChip(onClick = onNavigateToAnalytics, label = { Text("Analytics") })
+                }
+            }
+        }
+
         // Safe to Spend
         item {
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Safe to Spend (Daily)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     if (state.safeToSpend != null) {
-                        Text("$${state.safeToSpend}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(state.safeToSpend.toINR(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     } else {
                         Text("Budget data unavailable", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
@@ -106,13 +148,13 @@ fun DashboardContent(state: DashboardUiState.Success) {
                 Card(modifier = Modifier.weight(1f)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Income", style = MaterialTheme.typography.labelSmall)
-                        Text("+$${state.currentStats.totalIncome}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("+${state.currentStats.totalIncome.toINR()}", style = MaterialTheme.typography.titleMedium, color = Color(0xFF4CAF50))
                     }
                 }
                 Card(modifier = Modifier.weight(1f)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Expenses", style = MaterialTheme.typography.labelSmall)
-                        Text("-$${state.currentStats.totalExpenses}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                        Text("-${state.currentStats.totalExpenses.toINR()}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -137,8 +179,8 @@ fun DashboardContent(state: DashboardUiState.Success) {
                         Text(tx.transactionDate, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        text = if (tx.type == "income") "+$${tx.amount}" else "-$${tx.amount}",
-                        color = if (tx.type == "income") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        text = if (tx.type == "income") "+${tx.amount.toINR()}" else "-${tx.amount.toINR()}",
+                        color = if (tx.type == "income") Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

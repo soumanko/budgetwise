@@ -39,16 +39,32 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun signUp(email: String, password: String) {
+    fun signUp(email: String, password: String, fullName: String) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            val result = authRepository.signUp(email, password)
+            val result = authRepository.signUp(email, password, fullName)
             if (result.isSuccess) {
-                _uiState.value = AuthUiState.Success
+                _uiState.value = AuthUiState.EmailSent
             } else {
                 _uiState.value = AuthUiState.Error(result.exceptionOrNull()?.message ?: "Signup failed")
             }
         }
+    }
+
+    fun resetPassword(email: String) {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            val result = authRepository.resetPassword(email)
+            if (result.isSuccess) {
+                _uiState.value = AuthUiState.EmailSent
+            } else {
+                _uiState.value = AuthUiState.Error(result.exceptionOrNull()?.message ?: "Failed to send reset link")
+            }
+        }
+    }
+
+    fun resetState() {
+        _uiState.value = AuthUiState.Idle
     }
 
     fun logout() {
@@ -62,5 +78,6 @@ sealed class AuthUiState {
     object Idle : AuthUiState()
     object Loading : AuthUiState()
     object Success : AuthUiState()
+    object EmailSent : AuthUiState()
     data class Error(val message: String) : AuthUiState()
 }

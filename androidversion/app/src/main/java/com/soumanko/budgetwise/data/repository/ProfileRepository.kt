@@ -17,4 +17,20 @@ class ProfileRepository(private val postgrest: Postgrest) {
             Result.failure(e)
         }
     }
+    suspend fun updateProfile(profile: Profile): Result<Profile> {
+        return try {
+            val updated = postgrest["profiles"]
+                .update(profile) {
+                    filter {
+                        eq("id", profile.id)
+                    }
+                    select()
+                }
+                .decodeSingle<Profile>()
+            Result.success(updated)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
 }

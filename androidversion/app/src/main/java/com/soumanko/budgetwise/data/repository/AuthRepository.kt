@@ -4,6 +4,8 @@ import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class AuthRepository(private val auth: Auth) {
 
@@ -21,12 +23,24 @@ class AuthRepository(private val auth: Auth) {
         }
     }
 
-    suspend fun signUp(email: String, password: String): Result<Unit> {
+    suspend fun signUp(email: String, password: String, fullName: String): Result<Unit> {
         return try {
             auth.signUpWith(Email) {
                 this.email = email
                 this.password = password
+                this.data = buildJsonObject {
+                    put("full_name", fullName)
+                }
             }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun resetPassword(email: String): Result<Unit> {
+        return try {
+            auth.resetPasswordForEmail(email)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

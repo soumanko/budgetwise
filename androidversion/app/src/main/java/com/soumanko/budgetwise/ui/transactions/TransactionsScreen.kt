@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.soumanko.budgetwise.data.model.Transaction
+import com.soumanko.budgetwise.domain.finance.toINR
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,8 +152,8 @@ fun TransactionItem(transaction: Transaction, onEdit: () -> Unit, onDelete: () -
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = if (transaction.type == "income") "+$${transaction.amount}" else "-$${transaction.amount}",
-                    color = if (transaction.type == "income") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    text = if (transaction.type == "income") "+${transaction.amount.toINR()}" else "-${transaction.amount.toINR()}",
+                    color = if (transaction.type == "income") Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
