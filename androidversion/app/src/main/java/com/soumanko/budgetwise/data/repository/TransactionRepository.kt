@@ -8,7 +8,13 @@ import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigDecimal
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+
 class TransactionRepository(private val postgrest: Postgrest) {
+
+    private val _refreshSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val refreshSignal: SharedFlow<Unit> = _refreshSignal
 
     suspend fun getTransactions(): Result<List<Transaction>> {
         return try {
@@ -100,6 +106,7 @@ class TransactionRepository(private val postgrest: Postgrest) {
     suspend fun addTransaction(transaction: TransactionInsert): Result<Unit> {
         return try {
             postgrest["transactions"].insert(transaction)
+            _refreshSignal.tryEmit(Unit)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -113,6 +120,7 @@ class TransactionRepository(private val postgrest: Postgrest) {
                     eq("id", transaction.id)
                 }
             }
+            _refreshSignal.tryEmit(Unit)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -126,6 +134,7 @@ class TransactionRepository(private val postgrest: Postgrest) {
                     eq("id", id)
                 }
             }
+            _refreshSignal.tryEmit(Unit)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -43,6 +43,11 @@ class DashboardViewModel(
 
     init {
         loadData()
+        viewModelScope.launch {
+            transactionRepository.refreshSignal.collect {
+                loadData()
+            }
+        }
     }
 
     fun loadData() {

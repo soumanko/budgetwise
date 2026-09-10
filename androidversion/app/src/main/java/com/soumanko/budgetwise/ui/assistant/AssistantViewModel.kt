@@ -54,16 +54,16 @@ class AssistantViewModel(
 
         viewModelScope.launch {
             try {
-                val contextData = buildContextData()
-                val replyText = callAiBackend(text, contextData)
+                val replyText = callAiBackend(text)
                 
                 val botMessage = ChatMessage((System.currentTimeMillis() + 1).toString(), replyText, false)
                 _messages.value = _messages.value + botMessage
             } catch (e: Exception) {
                 e.printStackTrace()
+                val errorDesc = e.message ?: "Unknown error"
                 val errorMessage = ChatMessage(
                     (System.currentTimeMillis() + 1).toString(), 
-                    "Sorry, I'm having trouble connecting to the AI service right now. Please ensure the backend is deployed and try again.", 
+                    "AI Service Error: $errorDesc", 
                     false
                 )
                 _messages.value = _messages.value + errorMessage
@@ -109,63 +109,80 @@ class AssistantViewModel(
         }
     }
 
-    private suspend fun callAiBackend(userMessage: String, contextData: String): String {
-        return withContext(Dispatchers.IO) {
-            val session = supabaseClient.auth.currentSessionOrNull() 
-                ?: throw Exception("No authenticated session")
-            
-            val url = URL("https://wpwfaztaxqvhuubdspou.supabase.co/functions/v1/chat")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
-            connection.doOutput = true
-
-            val messagesArray = JSONArray()
-            
-            // Add system context
-            val systemObj = JSONObject()
-            systemObj.put("role", "system")
-            systemObj.put("content", "You are the BudgetWise AI financial assistant. You MUST base all your answers on the following user financial data: $contextData. Use the ₹ symbol for currency. Do not invent balances or data.")
-            messagesArray.put(systemObj)
-
-            // Add chat history (last 5 messages)
-            _messages.value.takeLast(5).forEach { msg ->
-                val msgObj = JSONObject()
-                msgObj.put("role", if (msg.isUser) "user" else "assistant")
-                msgObj.put("content", msg.text)
-                messagesArray.put(msgObj)
-            }
-
-            // The newest user message is already in _messages.value, so it was added in the loop above.
-            
-            val payload = JSONObject()
-            payload.put("messages", messagesArray)
-
-            val out = OutputStreamWriter(connection.outputStream)
-            out.write(payload.toString())
-            out.close()
-
-            if (connection.responseCode in 200..299) {
-                val responseString = connection.inputStream.bufferedReader().use { it.readText() }
-                // Parse the expected format from your edge function
-                // Assuming it returns { "reply": "message" } or similar
-                try {
-                    val jsonResponse = JSONObject(responseString)
-                    if (jsonResponse.has("reply")) {
-                        jsonResponse.getString("reply")
-                    } else if (jsonResponse.has("choices")) {
-                        jsonResponse.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-                    } else {
-                        responseString
-                    }
+    private suspend fun callAiBackend(userMessage: String): String {
+        return try {
+            withContext(Dispatchers.IO) {
+                val session = supabaseClient.auth.currentSessionOrNull() 
+                    ?: throw Exception("Authentication Failure: No active session")
+                
+                val url = URL(com.soumanko.budgetwise.AppConfig.AI_BACKEND_URL)
+                android.util.Log.d("AssistantVM", "Sending AI request to: $url")
+                
+                val connection = try {
+                    url.openConnection() as HttpURLConnection
                 } catch (e: Exception) {
-                    responseString
+                    throw Exception("Network Failure: Cannot connect to server (${e.message})")
                 }
-            } else {
-                val errorStr = connection.errorStream.bufferedReader().use { it.readText() }
-                throw Exception("API Error: ${connection.responseCode} $errorStr")
+                
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+                connection.doOutput = true
+                connection.connectTimeout = 15000
+                connection.readTimeout = 30000
+
+                val payload = JSONObject()
+                payload.put("message", userMessage)
+
+                try {
+                    val out = OutputStreamWriter(connection.outputStream)
+                    out.write(payload.toString())
+                    out.close()
+                } catch (e: Exception) {
+                    throw Exception("Network Failure: Failed to send request (${e.message})")
+                }
+
+                val responseCode = try {
+                    connection.responseCode
+                } catch (e: Exception) {
+                    throw Exception("Network Failure: Did not receive a response from the server (${e.message})")
+                }
+                
+                android.util.Log.d("AssistantVM", "Received HTTP Status: $responseCode")
+
+                if (responseCode in 200..299) {
+                    val responseString = connection.inputStream.bufferedReader().use { it.readText() }
+                    android.util.Log.d("AssistantVM", "Received successful response: $responseString")
+                    try {
+                        val jsonResponse = JSONObject(responseString)
+                        if (jsonResponse.has("response")) {
+                            jsonResponse.getString("response")
+                        } else if (jsonResponse.has("reply")) {
+                            jsonResponse.getString("reply")
+                        } else if (jsonResponse.has("choices")) {
+                            jsonResponse.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+                        } else {
+                            throw Exception("Malformed AI Response: Missing expected fields. Raw: $responseString")
+                        }
+                    } catch (e: Exception) {
+                        if (e.message?.startsWith("Malformed AI Response") == true) throw e
+                        throw Exception("Malformed AI Response: Failed to parse JSON (${e.message})")
+                    }
+                } else {
+                    val errorStr = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No error body"
+                    android.util.Log.e("AssistantVM", "API Error Body: $errorStr")
+                    
+                    when (responseCode) {
+                        401, 403 -> throw Exception("Authentication Failure (HTTP $responseCode): $errorStr")
+                        404 -> throw Exception("Endpoint/Deployment Failure (HTTP 404): The Vercel route was not found. $errorStr")
+                        in 500..599 -> throw Exception("Backend Failure (HTTP $responseCode): $errorStr")
+                        else -> throw Exception("HTTP $responseCode Error: $errorStr")
+                    }
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("AssistantVM", "Exception in callAiBackend: ${e.javaClass.simpleName} - ${e.message}")
+            throw e
         }
     }
 }

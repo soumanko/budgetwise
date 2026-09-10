@@ -4,10 +4,46 @@ import { fetchGroqCompletion, FINANCIAL_ASSISTANT_SYSTEM_PROMPT } from '@/lib/ai
 import { calculateMonthlyStats, calculateCategorySpending, calculateBalance } from '@/lib/finance/calculations';
 import { getMonthStart, getMonthEnd, formatCurrency } from '@/lib/utils';
 
+import { createClient } from '@supabase/supabase-js';
+
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    let supabase = await createServerSupabaseClient();
+    let user;
+
+    const authHeader = request.headers.get('Authorization');
+    console.log('[DEBUG AI CHAT] Authorization header exists:', !!authHeader);
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      
+      // Re-create the supabase client with the explicit Authorization header for PostgREST
+      supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        {
+          global: {
+            headers: {
+              Authorization: authHeader,
+            },
+          },
+        }
+      ) as any;
+
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+         console.log('[DEBUG AI CHAT] getUser error:', error.message);
+      }
+      user = data?.user;
+    } else {
+      const { data } = await supabase.auth.getUser();
+      user = data?.user;
+    }
+
+    console.log('[DEBUG AI CHAT] Authentication succeeded:', !!user);
+    if (user) {
+      console.log('[DEBUG AI CHAT] Authenticated user ID:', user.id);
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,9 +53,6 @@ export async function POST(request: NextRequest) {
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
-
-    console.log('[DEBUG AI CHAT] Boolean(process.env.GROQ_API_KEY):', Boolean(process.env.GROQ_API_KEY));
-    console.log('[DEBUG AI CHAT] process.env.GROQ_MODEL:', process.env.GROQ_MODEL);
 
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
@@ -41,6 +74,9 @@ export async function POST(request: NextRequest) {
       supabase.from('savings_goals').select('name, target_amount, current_amount, deadline').eq('user_id', user.id),
     ]);
 
+    if (allTxRes.error) console.error('[DEBUG AI CHAT] allTxRes error:', allTxRes.error);
+    if (profileRes.error) console.error('[DEBUG AI CHAT] profileRes error:', profileRes.error);
+
     const allTransactions = allTxRes.data || [];
     const monthTransactions = monthTxRes.data || [];
     const profile = profileRes.data;
@@ -48,6 +84,9 @@ export async function POST(request: NextRequest) {
     const recurring = recurringRes.data || [];
     const goals = goalsRes.data || [];
 
+    console.log('[DEBUG AI CHAT] Transaction query result count:', allTransactions.length);
+    console.log('[DEBUG AI CHAT] Profile query success:', !!profile);
+    
     // Build aggregated context
     const balance = calculateBalance(allTransactions as never[]);
     const monthStats = calculateMonthlyStats(monthTransactions as never[]);
@@ -58,6 +97,8 @@ export async function POST(request: NextRequest) {
     const categoryInfo = categorySpending.map(c => `${c.category}: ${formatCurrency(c.amount, currency)} (${c.percentage}%)`).join(', ');
     const recurringInfo = recurring.map(r => `${r.name}: ${formatCurrency(r.amount, currency)}/${r.frequency}`).join(', ');
     const goalsInfo = goals.map(g => `${g.name}: ${formatCurrency(g.current_amount, currency)}/${formatCurrency(g.target_amount, currency)}`).join(', ');
+
+    console.log('[DEBUG AI CHAT] Final Context Stats -> Total Tx:', allTransactions.length, 'Month Tx:', monthTransactions.length, 'Budgets:', budgets.length, 'Recurring:', recurring.length, 'Goals:', goals.length);
 
     const context = `
 USER FINANCIAL CONTEXT (as of today):

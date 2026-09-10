@@ -48,6 +48,11 @@ class TransactionsViewModel(
 
     init {
         loadInitial()
+        viewModelScope.launch {
+            repository.refreshSignal.collect {
+                loadInitial()
+            }
+        }
     }
 
     fun setFilters(type: String, category: String, query: String) {

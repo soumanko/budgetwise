@@ -36,10 +36,11 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/forgot-password') ||
-    request.nextUrl.pathname.startsWith('/reset-password') ||
-    request.nextUrl.pathname.startsWith('/api/ai/health');
+    request.nextUrl.pathname.startsWith('/reset-password');
 
-  if (!user && !isAuthPage) {
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
+
+  if (!user && !isAuthPage && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
