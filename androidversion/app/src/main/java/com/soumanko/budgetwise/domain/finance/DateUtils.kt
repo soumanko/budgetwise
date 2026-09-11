@@ -11,6 +11,10 @@ object DateUtils {
         return date.withDayOfMonth(1).format(formatter)
     }
 
+    fun getTodayDateStr(): String {
+        return LocalDate.now().format(formatter)
+    }
+
     fun getMonthEnd(date: LocalDate = LocalDate.now()): String {
         val lastDay = YearMonth.from(date).atEndOfMonth()
         return lastDay.format(formatter)

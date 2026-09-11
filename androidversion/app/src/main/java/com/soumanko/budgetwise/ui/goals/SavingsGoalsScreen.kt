@@ -31,12 +31,7 @@ fun SavingsGoalsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Savings Goals") },
-                actions = {
-                    IconButton(onClick = onNavigateToCreate) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add Goal")
-                    }
-                }
+                title = { Text("Savings Goals") }
             )
         },
         floatingActionButton = {

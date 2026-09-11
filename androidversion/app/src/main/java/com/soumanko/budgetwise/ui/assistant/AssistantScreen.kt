@@ -12,6 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -19,7 +25,6 @@ import androidx.compose.ui.unit.dp
 fun AssistantScreen(viewModel: AssistantViewModel) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
-    var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
@@ -39,6 +44,7 @@ fun AssistantScreen(viewModel: AssistantViewModel) {
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
+                .imePadding() // Automatically resize to remain above the keyboard
         ) {
             LazyColumn(
                 state = listState,
@@ -70,38 +76,54 @@ fun AssistantScreen(viewModel: AssistantViewModel) {
                 }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("Ask me anything...") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp)
+            // Input is extracted to isolate recomposition!
+            MessageInputRow(
+                isTyping = isTyping,
+                onSendMessage = { text -> viewModel.sendMessage(text) }
+            )
+        }
+    }
+}
+
+@Composable
+fun MessageInputRow(isTyping: Boolean, onSendMessage: (String) -> Unit) {
+    var inputText by remember { mutableStateOf("") }
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = inputText,
+            onValueChange = { inputText = it },
+            placeholder = { Text("Ask me anything...") },
+            modifier = Modifier.weight(1f),
+            singleLine = false, // Allow multiline
+            maxLines = 4, // Up to 4 lines before scrolling inside the input
+            shape = RoundedCornerShape(24.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(
+            onClick = {
+                val textToSend = inputText
+                inputText = ""
+                onSendMessage(textToSend)
+            },
+            enabled = inputText.isNotBlank() && !isTyping,
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    if (inputText.isNotBlank() && !isTyping) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, 
+                    RoundedCornerShape(24.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = {
-                        viewModel.sendMessage(inputText)
-                        inputText = ""
-                    },
-                    enabled = inputText.isNotBlank() && !isTyping,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Send,
-                        contentDescription = "Send",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Send,
+                contentDescription = "Send",
+                tint = if (inputText.isNotBlank() && !isTyping) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -124,14 +146,55 @@ fun ChatBubble(message: ChatMessage) {
                 bottomStart = if (message.isUser) 16.dp else 4.dp,
                 bottomEnd = if (message.isUser) 4.dp else 16.dp
             ),
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier.widthIn(max = 320.dp)
         ) {
             Text(
-                text = message.text,
+                text = parseMarkdownToAnnotatedString(message.text),
                 color = textColor,
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyLarge
             )
+        }
+    }
+}
+
+// Simple markdown parser to handle **bold** and *italic*
+fun parseMarkdownToAnnotatedString(text: String): AnnotatedString {
+    return buildAnnotatedString {
+        var i = 0
+        while (i < text.length) {
+            when {
+                // **Bold**
+                text.startsWith("**", i) -> {
+                    val endToken = text.indexOf("**", i + 2)
+                    if (endToken != -1) {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(text.substring(i + 2, endToken))
+                        }
+                        i = endToken + 2
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                // *Italic*
+                text.startsWith("*", i) -> {
+                    val endToken = text.indexOf("*", i + 1)
+                    if (endToken != -1) {
+                        withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(text.substring(i + 1, endToken))
+                        }
+                        i = endToken + 1
+                    } else {
+                        append(text[i])
+                        i++
+                    }
+                }
+                else -> {
+                    append(text[i])
+                    i++
+                }
+            }
         }
     }
 }

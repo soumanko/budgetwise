@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer background circle/squircle if needed, but for splash we usually just put the icon. Let's make it a solid icon. -->
+    <path
+        android:fillColor="@color/bw_turquoise"
+        android:pathData="M 27,76.5 l 10.35,-10.35 18,18 25.65,-25.65 -6.3,-6.3 -19.35,19.35 -18,-18 -16.65,16.65 z" />
+    <path
+        android:fillColor="@color/bw_turquoise"
+        android:pathData="M 63,49.5 v 9 h 22.5 v -22.5 h -9 v 13.5 z" />
+</vector>

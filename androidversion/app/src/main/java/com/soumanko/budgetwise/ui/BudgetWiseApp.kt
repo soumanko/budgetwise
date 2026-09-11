@@ -3,6 +3,7 @@ package com.soumanko.budgetwise.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -30,7 +31,10 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 
 @Composable
-fun BudgetWiseApp() {
+fun BudgetWiseApp(
+    onRequestNotificationPermission: () -> Unit = {},
+    onAppearanceChanged: (String) -> Unit = {}
+) {
     val authViewModel: AuthViewModel = viewModel()
     val sessionStatus by authViewModel.sessionStatus.collectAsState()
 
@@ -43,7 +47,12 @@ fun BudgetWiseApp() {
             }
         }
         is SessionStatus.Authenticated -> {
-            MainAppShell(navController = navController, authViewModel = authViewModel)
+            MainAppShell(
+                navController = navController, 
+                authViewModel = authViewModel, 
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onAppearanceChanged = onAppearanceChanged
+            )
         }
         else -> {
             var authRoute by remember { mutableStateOf("login") }
@@ -75,7 +84,12 @@ fun BudgetWiseApp() {
 }
 
 @Composable
-fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel) {
+fun MainAppShell(
+    navController: NavHostController, 
+    authViewModel: AuthViewModel, 
+    onRequestNotificationPermission: () -> Unit,
+    onAppearanceChanged: (String) -> Unit
+) {
     val transactionRepository = remember { TransactionRepository(SupabaseClient.client.postgrest) }
     val accountRepository = remember { com.soumanko.budgetwise.data.repository.AccountRepository(SupabaseClient.client.postgrest) }
     val profileRepository = remember { com.soumanko.budgetwise.data.repository.ProfileRepository(SupabaseClient.client.postgrest) }
@@ -103,7 +117,7 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
                         selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                         onClick = {
                             navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
+                                popUpTo(Screen.Dashboard.route) {
                                     saveState = true
                                 }
                                 launchSingleTop = true
@@ -118,7 +132,7 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
         NavHost(
             navController = navController,
             startDestination = Screen.Dashboard.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)
         ) {
             composable(Screen.Dashboard.route) {
                 com.soumanko.budgetwise.ui.dashboard.DashboardScreen(
@@ -128,7 +142,25 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
                     onNavigateToRecurring = { navController.navigate("recurring") },
                     onNavigateToSavingsGoals = { navController.navigate("savings_goals") },
                     onNavigateToAnalytics = { navController.navigate("analytics") },
-                    onNavigateToProfile = { navController.navigate("profile") }
+                    onNavigateToProfile = { navController.navigate("profile") },
+                    onNavigateToAddTransaction = { navController.navigate("transaction_form") },
+                    onNavigateToTransactions = { 
+                        navController.navigate(Screen.Transactions.route) {
+                            popUpTo(Screen.Dashboard.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onNavigateToDailyReceipt = { navController.navigate("daily_receipt") }
+                )
+            }
+            composable("daily_receipt") {
+                val receiptViewModel: com.soumanko.budgetwise.ui.receipt.ReceiptViewModel = viewModel(
+                    factory = com.soumanko.budgetwise.ui.receipt.ReceiptViewModelFactory(transactionRepository)
+                )
+                com.soumanko.budgetwise.ui.receipt.ReceiptScreen(
+                    viewModel = receiptViewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable(Screen.Transactions.route) {
@@ -141,7 +173,6 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
             }
             composable("transaction_form") {
                 val transactionsViewModel: com.soumanko.budgetwise.ui.transactions.TransactionsViewModel = viewModel(
-                    navController.getBackStackEntry(Screen.Transactions.route),
                     factory = com.soumanko.budgetwise.ui.transactions.TransactionsViewModelFactory(transactionRepository, accountRepository)
                 )
                 com.soumanko.budgetwise.ui.transactions.TransactionFormScreen(
@@ -258,7 +289,19 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
                 )
                 com.soumanko.budgetwise.ui.profile.ProfileScreen(
                     viewModel = profileViewModel,
-                    onLogout = { navController.navigate("login") { popUpTo(0) } }
+                    onLogout = { navController.navigate("login") { popUpTo(0) } },
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onAppearanceChanged = onAppearanceChanged,
+                    onNavigateToFinancialStatement = { navController.navigate("financial_statement") }
+                )
+            }
+            composable("financial_statement") {
+                val statementViewModel: com.soumanko.budgetwise.ui.statement.StatementViewModel = viewModel(
+                    factory = com.soumanko.budgetwise.ui.statement.StatementViewModelFactory(transactionRepository)
+                )
+                com.soumanko.budgetwise.ui.statement.StatementScreen(
+                    viewModel = statementViewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
             composable("analytics") {
@@ -266,7 +309,9 @@ fun MainAppShell(navController: NavHostController, authViewModel: AuthViewModel)
                     factory = com.soumanko.budgetwise.ui.analytics.AnalyticsViewModelFactory(transactionRepository)
                 )
                 com.soumanko.budgetwise.ui.analytics.AnalyticsScreen(
-                    viewModel = analyticsViewModel
+                    viewModel = analyticsViewModel,
+                    onNavigateToBudgets = { navController.navigate("budgets") },
+                    onNavigateToTransactions = { navController.navigate(Screen.Transactions.route) }
                 )
             }
         }

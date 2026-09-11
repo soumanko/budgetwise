@@ -29,12 +29,7 @@ fun RecurringExpensesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recurring Expenses") },
-                actions = {
-                    IconButton(onClick = onNavigateToCreate) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add Expense")
-                    }
-                }
+                title = { Text("Recurring Expenses") }
             )
         },
         floatingActionButton = {

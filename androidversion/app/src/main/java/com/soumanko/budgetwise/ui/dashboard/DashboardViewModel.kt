@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 import java.math.BigDecimal
 
 sealed class DashboardUiState {
@@ -26,7 +28,8 @@ sealed class DashboardUiState {
         val previousStats: MonthlyStats,
         val categorySpending: List<CategorySpending>,
         val safeToSpend: BigDecimal?,
-        val recentTransactions: List<Transaction>
+        val recentTransactions: List<Transaction>,
+        val todayTransactions: List<Transaction>
     ) : DashboardUiState()
     object Empty : DashboardUiState()
     data class Error(val message: String) : DashboardUiState()
@@ -40,6 +43,8 @@ class DashboardViewModel(
 
     private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    
+    private var fetchJob: Job? = null
 
     init {
         loadData()
@@ -51,11 +56,25 @@ class DashboardViewModel(
     }
 
     fun loadData() {
-        viewModelScope.launch {
-            _uiState.value = DashboardUiState.Loading
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
+            if (_uiState.value !is DashboardUiState.Success) {
+                _uiState.value = DashboardUiState.Loading
+            }
             
-            // Get Balance from RPC
-            val balanceResult = transactionRepository.getTotalBalance()
+            val monthStart = DateUtils.getMonthStart()
+            val monthEnd = DateUtils.getMonthEnd()
+            val prevMonthStart = DateUtils.getPreviousMonthDateStr()
+            val prevMonthEnd = DateUtils.getPreviousMonthEndStr()
+
+            // Run network reads concurrently
+            val balanceDeferred = async { transactionRepository.getTotalBalance() }
+            val txDeferred = async { transactionRepository.getTransactionsByDateRange(prevMonthStart, monthEnd) }
+            val recentDeferred = async { transactionRepository.getTransactionsPage(lastCreatedAt = null, lastId = null, limitCount = 8) }
+            val profileDeferred = async { profileRepository.getProfile() }
+            val recurringDeferred = async { recurringExpenseRepository.getActiveRecurringExpenses() }
+
+            val balanceResult = balanceDeferred.await()
             if (balanceResult.isFailure) {
                 _uiState.value = DashboardUiState.Error(
                     balanceResult.exceptionOrNull()?.message ?: "Failed to fetch balance"
@@ -63,29 +82,17 @@ class DashboardViewModel(
                 return@launch
             }
             val balance = balanceResult.getOrNull() ?: BigDecimal.ZERO
-
-            // Get transactions for current and previous month only
-            val monthStart = DateUtils.getMonthStart()
-            val monthEnd = DateUtils.getMonthEnd()
-            val prevMonthStart = DateUtils.getPreviousMonthDateStr()
-            val prevMonthEnd = DateUtils.getPreviousMonthEndStr()
             
-            val txResult = transactionRepository.getTransactionsByDateRange(prevMonthStart, monthEnd)
-            
-            // Get Global Recent Transactions
-            val recentResult = transactionRepository.getTransactionsPage(
-                lastCreatedAt = null, lastId = null, limitCount = 8
-            )
-
-            // Get Profile and Recurring Expenses for SafeToSpend
-            val profileResult = profileRepository.getProfile()
-            val recurringResult = recurringExpenseRepository.getActiveRecurringExpenses()
+            val txResult = txDeferred.await()
+            val recentResult = recentDeferred.await()
+            val profileResult = profileDeferred.await()
+            val recurringResult = recurringDeferred.await()
             
             if (txResult.isSuccess && recentResult.isSuccess) {
                 val transactions = txResult.getOrNull() ?: emptyList()
                 val recentTransactions = recentResult.getOrNull() ?: emptyList()
                 
-                if (transactions.isEmpty() && recentTransactions.isEmpty() && balance == BigDecimal.ZERO) {
+                if (transactions.isEmpty() && recentTransactions.isEmpty() && balance.compareTo(BigDecimal.ZERO) == 0) {
                     _uiState.value = DashboardUiState.Empty
                     return@launch
                 }
@@ -105,20 +112,29 @@ class DashboardViewModel(
                 val previousStats = Calculations.calculateMonthlyStats(prevMonthTx)
                 val categorySpending = Calculations.calculateCategorySpending(currentMonthTx)
                 
-                // Safe to spend calculation
-                val profile = profileResult.getOrNull()
-                val recurringExpenses = recurringResult.getOrNull() ?: emptyList()
-                
-                val monthlyBudget = profile?.monthlyBudget ?: BigDecimal.ZERO
-                val upcomingRecurringTotal = recurringExpenses.fold(BigDecimal.ZERO) { acc, exp -> acc.add(exp.amount) }
-                val daysRemaining = DateUtils.getDaysRemainingInMonth()
-                
-                val safeToSpend = FinanceCalculations.calculateSafeToSpend(
-                    balance = balance,
-                    daysRemaining = daysRemaining,
-                    upcomingRecurringTotal = upcomingRecurringTotal,
-                    monthlyBudget = monthlyBudget
-                )
+                // Safe to spend calculation semantics
+                // Do not fabricate if optional inputs fail
+                val safeToSpend = if (profileResult.isSuccess && recurringResult.isSuccess) {
+                    val profile = profileResult.getOrNull()
+                    if (profile != null) {
+                        val recurringExpenses = recurringResult.getOrNull() ?: emptyList()
+                        val monthlyBudget = profile.monthlyBudget
+                        val upcomingRecurringTotal = recurringExpenses.fold(BigDecimal.ZERO) { acc, exp -> acc.add(exp.amount) }
+                        val daysRemaining = DateUtils.getDaysRemainingInMonth()
+                        
+                        FinanceCalculations.calculateSafeToSpend(
+                            balance = balance,
+                            daysRemaining = daysRemaining,
+                            upcomingRecurringTotal = upcomingRecurringTotal,
+                            monthlyBudget = monthlyBudget
+                        )
+                    } else null
+                } else {
+                    null
+                }
+
+                val todayStr = DateUtils.getTodayDateStr()
+                val todayTransactions = currentMonthTx.filter { it.transactionDate == todayStr }
 
                 _uiState.value = DashboardUiState.Success(
                     balance = balance,
@@ -126,7 +142,8 @@ class DashboardViewModel(
                     previousStats = previousStats,
                     categorySpending = categorySpending,
                     safeToSpend = safeToSpend,
-                    recentTransactions = recentTransactions
+                    recentTransactions = recentTransactions,
+                    todayTransactions = todayTransactions
                 )
 
             } else {

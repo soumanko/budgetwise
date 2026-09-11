@@ -27,12 +27,7 @@ fun BudgetsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Budgets") },
-                actions = {
-                    IconButton(onClick = onNavigateToCreate) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add Budget")
-                    }
-                }
+                title = { Text("Budgets") }
             )
         },
         floatingActionButton = {
@@ -64,7 +59,7 @@ fun BudgetsScreen(
                             items(state.budgets, key = { it.budget.category }) { progress ->
                                 BudgetProgressCard(
                                     progress = progress,
-                                    onClick = { onNavigateToEdit(progress.budget.category, progress.budget.amount.toString()) }
+                                    onNavigateToEdit = onNavigateToEdit
                                 )
                             }
                         }
@@ -76,8 +71,8 @@ fun BudgetsScreen(
 }
 
 @Composable
-fun BudgetProgressCard(progress: BudgetProgress, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
+fun BudgetProgressCard(progress: BudgetProgress, onNavigateToEdit: (String, String) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().clickable { onNavigateToEdit(progress.budget.category, progress.budget.amount.toString()) }) {
         Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -89,7 +84,7 @@ fun BudgetProgressCard(progress: BudgetProgress, onClick: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { progress.percentage.coerceIn(0f, 1f) },
+                progress = progress.percentage.coerceIn(0f, 1f),
                 modifier = Modifier.fillMaxWidth().height(8.dp),
                 color = if (progress.percentage > 1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             )

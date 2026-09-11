@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 sealed class TransactionsUiState {
     object LoadingInitial : TransactionsUiState()
@@ -45,6 +47,9 @@ class TransactionsViewModel(
     private var isFetchingNext = false
 
     private val PAGE_SIZE = 20L
+    
+    private var fetchJob: Job? = null
+    private var debounceJob: Job? = null
 
     init {
         loadInitial()
@@ -60,11 +65,17 @@ class TransactionsViewModel(
         typeFilter = type
         categoryFilter = category
         searchQuery = query
-        loadInitial()
+        
+        debounceJob?.cancel()
+        debounceJob = viewModelScope.launch {
+            delay(350)
+            loadInitial()
+        }
     }
 
     fun loadInitial() {
-        viewModelScope.launch {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
             if (primaryAccountId == null) {
                 primaryAccountId = accountRepository.getPrimaryAccount().getOrNull()?.id
             }
@@ -107,43 +118,47 @@ class TransactionsViewModel(
         if (isEndOfList || isFetchingNext || _uiState.value !is TransactionsUiState.Success) return
         val currentState = _uiState.value as TransactionsUiState.Success
 
-        viewModelScope.launch {
-            isFetchingNext = true
-            _uiState.value = currentState.copy(isFetchingNextPage = true)
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
+            try {
+                isFetchingNext = true
+                _uiState.value = currentState.copy(isFetchingNextPage = true)
 
-            val result = repository.getTransactionsPage(
-                lastCreatedAt = lastCreatedAt,
-                lastId = lastId,
-                limitCount = PAGE_SIZE,
-                type = typeFilter,
-                category = categoryFilter,
-                searchQuery = searchQuery
-            )
+                val result = repository.getTransactionsPage(
+                    lastCreatedAt = lastCreatedAt,
+                    lastId = lastId,
+                    limitCount = PAGE_SIZE,
+                    type = typeFilter,
+                    category = categoryFilter,
+                    searchQuery = searchQuery
+                )
 
-            if (result.isSuccess) {
-                val newItems = result.getOrNull() ?: emptyList()
-                if (newItems.isEmpty()) {
-                    isEndOfList = true
-                    _uiState.value = currentState.copy(isFetchingNextPage = false, isEndOfList = true)
+                if (result.isSuccess) {
+                    val newItems = result.getOrNull() ?: emptyList()
+                    if (newItems.isEmpty()) {
+                        isEndOfList = true
+                        _uiState.value = currentState.copy(isFetchingNextPage = false, isEndOfList = true)
+                    } else {
+                        if (newItems.size < PAGE_SIZE) isEndOfList = true
+                        lastCreatedAt = newItems.last().createdAt
+                        lastId = newItems.last().id
+                        
+                        val combinedList = currentState.transactions + newItems
+                        _uiState.value = currentState.copy(
+                            transactions = combinedList.distinctBy { it.id },
+                            isFetchingNextPage = false,
+                            isEndOfList = isEndOfList
+                        )
+                    }
                 } else {
-                    if (newItems.size < PAGE_SIZE) isEndOfList = true
-                    lastCreatedAt = newItems.last().createdAt
-                    lastId = newItems.last().id
-                    
-                    val combinedList = currentState.transactions + newItems
                     _uiState.value = currentState.copy(
-                        transactions = combinedList.distinctBy { it.id }, // prevent dupes defensively
                         isFetchingNextPage = false,
-                        isEndOfList = isEndOfList
+                        errorMessage = result.exceptionOrNull()?.message
                     )
                 }
-            } else {
-                _uiState.value = currentState.copy(
-                    isFetchingNextPage = false,
-                    errorMessage = result.exceptionOrNull()?.message
-                )
+            } finally {
+                isFetchingNext = false
             }
-            isFetchingNext = false
         }
     }
 

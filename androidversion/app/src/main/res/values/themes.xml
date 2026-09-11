@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.BudgetWise" parent="android:Theme.Material.Light.NoActionBar" />
+    
+    <style name="Theme.BudgetWise.Starting" parent="Theme.BudgetWise">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
 </resources>

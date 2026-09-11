@@ -1,29 +1,48 @@
 package com.soumanko.budgetwise.ui.analytics
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.soumanko.budgetwise.domain.finance.CategorySpending
+import com.soumanko.budgetwise.domain.finance.DailySpending
+import com.soumanko.budgetwise.domain.finance.MonthlyStats
 import com.soumanko.budgetwise.domain.finance.toINR
-import androidx.compose.ui.graphics.Color
+import com.soumanko.budgetwise.ui.theme.BudgetTurquoise
+import com.soumanko.budgetwise.ui.theme.ExpenseRed
+import com.soumanko.budgetwise.ui.theme.IncomeGreen
+import java.math.BigDecimal
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
-    viewModel: AnalyticsViewModel
+    viewModel: AnalyticsViewModel,
+    onNavigateToBudgets: () -> Unit = {},
+    onNavigateToTransactions: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Analytics") }
-            )
+            TopAppBar(title = { Text("Analytics") })
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
@@ -42,84 +61,116 @@ fun AnalyticsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
-                        // Monthly Stats
-                        Text("Monthly Summary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            StatCard("Income", "+${state.monthlyStats.totalIncome.toINR()}", Color(0xFF4CAF50), Modifier.weight(1f))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            StatCard("Expenses", "-${state.monthlyStats.totalExpenses.toINR()}", MaterialTheme.colorScheme.error, Modifier.weight(1f))
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            StatCard("Net Savings", state.monthlyStats.netSavings.toINR(), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                            Spacer(modifier = Modifier.width(16.dp))
-                            StatCard("Savings Rate", "${state.monthlyStats.savingsRate}%", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                        }
+                        // 1. SUMMARY
+                        Text("Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                         
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Category Spending
-                        Text("Category Breakdown", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        if (state.categorySpending.isEmpty()) {
-                            Text("No expense data available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            state.categorySpending.forEach { category ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(category.category, style = MaterialTheme.typography.bodyLarge)
-                                        LinearProgressIndicator(
-                                            progress = { (category.percentage.toFloat() / 100f).coerceIn(0f, 1f) },
-                                            modifier = Modifier.fillMaxWidth().height(4.dp).padding(top = 4.dp),
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(category.amount.toINR(), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                        Text("${category.percentage}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Column {
+                                Text("Total Spent", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = state.monthlyStats.totalExpenses.toINR(),
+                                    style = MaterialTheme.typography.displayMedium.copy(
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+                                    ),
+                                    color = ExpenseRed,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column {
+                                    Text("Income", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("+${state.monthlyStats.totalIncome.toINR()}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = IncomeGreen)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Net Savings", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(state.monthlyStats.netSavings.toINR(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = BudgetTurquoise)
                                 }
                             }
                         }
 
-                        // Daily Spending (basic representation)
-                        Spacer(modifier = Modifier.height(32.dp))
-                        Text("Daily Spending", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        if (state.dailySpending.isEmpty()) {
-                            Text("No daily data available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            state.dailySpending.takeLast(7).forEach { day -> // Show last 7 days roughly
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(day.date)
-                                    Text("-${day.amount.toINR()}", color = MaterialTheme.colorScheme.error)
+                        // 2. INTERPRETATION
+                        Text("Interpretation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        
+                        val peakDay = state.dailySpending.maxByOrNull { it.amount }
+                        if (peakDay != null && peakDay.amount > BigDecimal.ZERO) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🔥", style = MaterialTheme.typography.titleMedium)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Highest spending day", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("${peakDay.date} — ${peakDay.amount.toINR()}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ExpenseRed)
                                 }
                             }
                         }
+
+                        if (state.categorySpending.isNotEmpty()) {
+                            val topCategory = state.categorySpending.maxByOrNull { it.amount }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            ) {
+                                Column(modifier = Modifier.padding(20.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("💡", style = MaterialTheme.typography.titleMedium)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("AI Insight", style = MaterialTheme.typography.titleMedium, color = BudgetTurquoise, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "You've spent ${topCategory?.percentage}% of your expenses on ${topCategory?.category}. Consider rebalancing if this exceeds your target.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        // 3. ACTION
+                        Text("Action", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = onNavigateToBudgets,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BudgetTurquoise, contentColor = Color.Black)
+                            ) {
+                                Text("Review Budgets", style = MaterialTheme.typography.titleMedium)
+                            }
+                            OutlinedButton(
+                                onClick = onNavigateToTransactions,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text("Audit Recent Transactions", style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun StatCard(label: String, value: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
         }
     }
 }

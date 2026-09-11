@@ -22,6 +22,11 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +84,7 @@ fun TransactionFormScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (transactionId == null) "Add Transaction" else "Edit Transaction") },
+                title = { Text(if (transactionId == null) "Add Transaction" else "Edit Transaction", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -94,141 +99,209 @@ fun TransactionFormScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Type Segmented Button / TabRow
-            TabRow(selectedTabIndex = if (type == "expense") 0 else 1) {
-                Tab(
-                    selected = type == "expense",
-                    onClick = { 
-                        type = "expense" 
-                        if (!Categories.EXPENSE_CATEGORIES.contains(category)) category = ""
-                    },
-                    text = { Text("Expense") }
-                )
-                Tab(
-                    selected = type == "income",
-                    onClick = { 
-                        type = "income" 
-                        if (!Categories.INCOME_CATEGORIES.contains(category)) category = ""
-                    },
-                    text = { Text("Income") }
-                )
-            }
-
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text("Amount *") },
-                leadingIcon = { Text("₹", modifier = Modifier.padding(start = 12.dp)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // Category Dropdown
-            var categoryExpanded by remember { mutableStateOf(false) }
-            val categories = if (type == "expense") Categories.EXPENSE_CATEGORIES else Categories.INCOME_CATEGORIES
-            
-            ExposedDropdownMenuBox(
-                expanded = categoryExpanded,
-                onExpandedChange = { categoryExpanded = !categoryExpanded }
+            // Type Segmented Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp))
+                    .padding(4.dp)
             ) {
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category *") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = categoryExpanded,
-                    onDismissRequest = { categoryExpanded = false }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (type == "expense") com.soumanko.budgetwise.ui.theme.ExpenseRed else Color.Transparent)
+                        .clickable { 
+                            type = "expense" 
+                            if (!Categories.EXPENSE_CATEGORIES.contains(category)) category = ""
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    categories.forEach { cat ->
-                        DropdownMenuItem(
-                            text = { Text(cat) },
-                            onClick = {
-                                category = cat
-                                categoryExpanded = false
-                            }
-                        )
-                    }
+                    Text("Expense", color = if (type == "expense") Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (type == "income") com.soumanko.budgetwise.ui.theme.IncomeGreen else Color.Transparent)
+                        .clickable { 
+                            type = "income" 
+                            if (!Categories.INCOME_CATEGORIES.contains(category)) category = ""
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Income", color = if (type == "income") Color.White else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Description") },
-                    modifier = Modifier.weight(1f)
-                )
-
-                if (type == "expense") {
-                    OutlinedTextField(
-                        value = merchant,
-                        onValueChange = { merchant = it },
-                        label = { Text("Merchant") },
-                        modifier = Modifier.weight(1f)
+            // Amount Input
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Amount", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("₹", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.onSurface)
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = amount,
+                        onValueChange = { amount = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.width(IntrinsicSize.Min).defaultMinSize(minWidth = 80.dp),
+                        decorationBox = { innerTextField ->
+                            if (amount.isEmpty()) {
+                                Text("0.00", style = MaterialTheme.typography.displayLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
+                            }
+                            innerTextField()
+                        }
                     )
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Payment Method Dropdown
-                var pmExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = pmExpanded,
-                    onExpandedChange = { pmExpanded = !pmExpanded },
-                    modifier = Modifier.weight(1f)
-                ) {
+            // Form Fields in a Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Category Dropdown
+                    var categoryExpanded by remember { mutableStateOf(false) }
+                    val categories = if (type == "expense") Categories.EXPENSE_CATEGORIES else Categories.INCOME_CATEGORIES
+                    
+                    ExposedDropdownMenuBox(
+                        expanded = categoryExpanded,
+                        onExpandedChange = { categoryExpanded = !categoryExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = category,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Category *") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                focusedContainerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = categoryExpanded,
+                            onDismissRequest = { categoryExpanded = false }
+                        ) {
+                            categories.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = { Text(cat) },
+                                    onClick = {
+                                        category = cat
+                                        categoryExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Payment Method Dropdown
+                    var pmExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(
+                        expanded = pmExpanded,
+                        onExpandedChange = { pmExpanded = !pmExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = paymentMethod,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Account") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = pmExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                focusedContainerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = pmExpanded,
+                            onDismissRequest = { pmExpanded = false }
+                        ) {
+                            Categories.PAYMENT_METHODS.forEach { pm ->
+                                DropdownMenuItem(
+                                    text = { Text(pm) },
+                                    onClick = {
+                                        paymentMethod = pm
+                                        pmExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Date Picker trigger
                     OutlinedTextField(
-                        value = paymentMethod,
+                        value = date,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Payment Method") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = pmExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        label = { Text("Date *") },
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Filled.DateRange, contentDescription = "Select Date")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    ExposedDropdownMenu(
-                        expanded = pmExpanded,
-                        onDismissRequest = { pmExpanded = false }
-                    ) {
-                        Categories.PAYMENT_METHODS.forEach { pm ->
-                            DropdownMenuItem(
-                                text = { Text(pm) },
-                                onClick = {
-                                    paymentMethod = pm
-                                    pmExpanded = false
-                                }
-                            )
-                        }
+
+                    if (type == "expense") {
+                        OutlinedTextField(
+                            value = merchant,
+                            onValueChange = { merchant = it },
+                            label = { Text("Merchant") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                focusedContainerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
                     }
+
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
                 }
-
-                // Date Picker trigger
-                OutlinedTextField(
-                    value = date,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Date *") },
-                    trailingIcon = {
-                        IconButton(onClick = { showDatePicker = true }) {
-                            Icon(Icons.Filled.DateRange, contentDescription = "Select Date")
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
             }
-
-            OutlinedTextField(
-                value = notes,
-                onValueChange = { notes = it },
-                label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth()
-            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -290,11 +363,13 @@ fun TransactionFormScreen(
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = !isSubmitting,
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (type == "income") Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                    containerColor = if (type == "income") com.soumanko.budgetwise.ui.theme.IncomeGreen else com.soumanko.budgetwise.ui.theme.ExpenseRed,
+                    contentColor = Color.White
                 )
             ) {
-                Text(if (isSubmitting) "Saving..." else "Save Transaction")
+                Text(if (isSubmitting) "Saving..." else if (type == "income") "Add Income" else "Add Expense", style = MaterialTheme.typography.titleMedium)
             }
         }
     }

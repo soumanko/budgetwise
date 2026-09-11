@@ -38,14 +38,36 @@ fun BudgetFormScreen(
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).padding(16.dp).fillMaxSize()) {
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Category") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                readOnly = initialCategory != null // category is part of primary key logic usually
-            )
+            var categoryExpanded by remember { mutableStateOf(false) }
+            
+            ExposedDropdownMenuBox(
+                expanded = categoryExpanded && initialCategory == null,
+                onExpandedChange = { if (initialCategory == null) categoryExpanded = !categoryExpanded }
+            ) {
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category") },
+                    trailingIcon = { if (initialCategory == null) ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    singleLine = true
+                )
+                ExposedDropdownMenu(
+                    expanded = categoryExpanded && initialCategory == null,
+                    onDismissRequest = { categoryExpanded = false }
+                ) {
+                    com.soumanko.budgetwise.domain.finance.Categories.EXPENSE_CATEGORIES.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat) },
+                            onClick = {
+                                category = cat
+                                categoryExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = amountStr,

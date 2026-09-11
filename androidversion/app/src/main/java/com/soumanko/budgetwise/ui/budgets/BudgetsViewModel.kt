@@ -14,8 +14,10 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.Stable
 import java.math.BigDecimal
 
+@Stable
 data class BudgetProgress(
     val budget: Budget,
     val spent: BigDecimal,
@@ -34,6 +36,11 @@ class BudgetsViewModel(
 
     init {
         loadBudgets()
+        viewModelScope.launch {
+            transactionRepository.refreshSignal.collect {
+                loadBudgets()
+            }
+        }
     }
 
     fun loadBudgets() {

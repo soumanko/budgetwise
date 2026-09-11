@@ -17,6 +17,11 @@ import androidx.compose.ui.unit.dp
 import com.soumanko.budgetwise.data.model.Transaction
 import com.soumanko.budgetwise.domain.finance.toINR
 import androidx.compose.ui.graphics.Color
+import com.soumanko.budgetwise.ui.theme.IncomeGreen
+import com.soumanko.budgetwise.ui.theme.ExpenseRed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,17 +33,21 @@ fun TransactionsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
 
-    // Pagination trigger
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-            .collect { lastIndex ->
-                if (uiState is TransactionsUiState.Success) {
-                    val state = uiState as TransactionsUiState.Success
-                    if (lastIndex != null && lastIndex >= state.transactions.size - 3) {
-                        viewModel.loadNextPage()
-                    }
-                }
+    // Pagination trigger using derivedStateOf to prevent excessive recomposition/flow emissions
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 3
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore && uiState is TransactionsUiState.Success) {
+            val state = uiState as TransactionsUiState.Success
+            if (!state.isFetchingNextPage) {
+                viewModel.loadNextPage()
             }
+        }
     }
 
     var showDeleteDialog by remember { mutableStateOf<Transaction?>(null) }
@@ -49,12 +58,7 @@ fun TransactionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Transactions") },
-                actions = {
-                    IconButton(onClick = onNavigateToCreate) {
-                        Icon(Icons.Filled.Add, contentDescription = "Add Transaction")
-                    }
-                }
+                title = { Text("Transactions") }
             )
         },
         floatingActionButton = {
@@ -139,29 +143,61 @@ fun TransactionsScreen(
 
 @Composable
 fun TransactionItem(transaction: Transaction, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable { onEdit() }) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    val isIncome = transaction.type == "income"
+    val amountColor = if (isIncome) IncomeGreen else ExpenseRed
+    val amountPrefix = if (isIncome) "+" else "-"
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onEdit() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(transaction.description ?: transaction.merchant ?: transaction.category, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("${transaction.category} • ${transaction.transactionDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (transaction.type == "income") "+${transaction.amount.toINR()}" else "-${transaction.amount.toINR()}",
-                    color = if (transaction.type == "income") Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
-                }
-            }
+            Text(
+                text = transaction.category.take(1).uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(16.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = transaction.merchant ?: transaction.category,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${transaction.category} · ${transaction.transactionDate}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = "$amountPrefix${transaction.amount.toINR()}",
+                color = amountColor,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
         }
     }
 }

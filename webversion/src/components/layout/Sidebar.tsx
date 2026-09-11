@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, ArrowLeftRight, PiggyBank, BarChart3,
-  Target, CalendarClock, Bot, Settings, LogOut, Wallet
+  Target, CalendarClock, Bot, Settings, LogOut, Wallet, FileText
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/budgets', label: 'Budgets', icon: PiggyBank },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
   { href: '/assistant', label: 'AI Assistant', icon: Bot },

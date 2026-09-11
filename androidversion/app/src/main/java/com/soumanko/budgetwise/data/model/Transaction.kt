@@ -1,10 +1,12 @@
 package com.soumanko.budgetwise.data.model
 
+import androidx.compose.runtime.Stable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 import java.math.BigDecimal
 
+@Stable
 @Serializable
 data class Transaction(
     val id: String,

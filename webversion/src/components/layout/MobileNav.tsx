@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, ArrowLeftRight, BarChart3, Bot, MoreHorizontal,
-  PiggyBank, Target, CalendarClock, Settings
+  PiggyBank, Target, CalendarClock, Settings, FileText
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,6 +17,7 @@ const primaryItems = [
 ];
 
 const moreItems = [
+  { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/budgets', label: 'Budgets', icon: PiggyBank },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/recurring', label: 'Recurring', icon: CalendarClock },
