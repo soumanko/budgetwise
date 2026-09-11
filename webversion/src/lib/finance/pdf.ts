@@ -6,6 +6,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { FinancialStatementData } from './statement';
+import { robotoBase64 } from './roboto';
 
 /**
  * Format a number as currency for the PDF (plain text, not Intl).
@@ -38,43 +39,58 @@ function pdfDate(dateStr: string): string {
  */
 export function generateFinancialStatementPdf(data: FinancialStatementData): Blob {
   const doc = new jsPDF();
+
+  // Register Roboto font to support Unicode symbols like ₹
+  doc.addFileToVFS('Roboto-Regular.ttf', robotoBase64);
+  doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+  doc.addFont('Roboto-Regular.ttf', 'Roboto', 'bold'); // Fake bold fallback since we only embed one weight
+  doc.setFont('Roboto', 'normal');
+
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
   const margin = 14;
   const rightEdge = pageW - margin;
   const c = data.currency;
 
+  let curY = 15;
+
   // ---- HEADER ----
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
   doc.setTextColor(120);
-  doc.text('BUDGETWISE', margin, 15);
+  doc.text('BUDGETWISE', margin, curY);
 
+  curY += 10;
   doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setTextColor(30);
-  const title = 'Financial Statement';
-  doc.text(title, margin, 26);
+  doc.text('Financial Statement', margin, curY);
 
+  curY += 8;
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Roboto', 'normal');
   doc.setTextColor(100);
-  doc.text(`${pdfDate(data.startDate)}  →  ${pdfDate(data.endDate)}`, margin, 34);
-  doc.text(`Generated: ${pdfDate(data.generatedDate)}`, margin, 40);
+  doc.text(`${pdfDate(data.startDate)}  →  ${pdfDate(data.endDate)}`, margin, curY);
+  doc.text(`Generated: ${pdfDate(data.generatedDate)}`, rightEdge, curY, { align: 'right' });
 
+  curY += 6;
   doc.setDrawColor(200);
   doc.setLineWidth(0.3);
-  doc.line(margin, 44, rightEdge, 44);
+  doc.line(margin, curY, rightEdge, curY);
+  curY += 8;
+
+  const defaultStyles = { font: 'Roboto', fontSize: 10, textColor: 40 };
 
   // ---- FINANCIAL SUMMARY ----
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setTextColor(100);
-  doc.text('FINANCIAL SUMMARY', margin, 52);
+  doc.text('FINANCIAL SUMMARY', margin, curY);
+  curY += 4;
 
   autoTable(doc, {
-    startY: 56,
+    startY: curY,
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
+    styles: { ...defaultStyles, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 50 },
       1: { halign: 'left' },
@@ -88,12 +104,11 @@ export function generateFinancialStatementPdf(data: FinancialStatementData): Blo
     ],
   });
 
-  let curY = (doc as any).lastAutoTable?.finalY || 100;
+  curY = (doc as any).lastAutoTable?.finalY + 8 || curY + 40;
 
   // ---- SPENDING OVERVIEW ----
-  curY += 8;
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.setTextColor(100);
   doc.text('SPENDING OVERVIEW', margin, curY);
   curY += 4;
@@ -101,26 +116,27 @@ export function generateFinancialStatementPdf(data: FinancialStatementData): Blo
   autoTable(doc, {
     startY: curY,
     theme: 'plain',
-    styles: { fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
+    styles: { ...defaultStyles, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
     columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
     body: [
-      ['Total Transactions', String(data.stats.transactionCount)],
-      ['Expense Transactions', String(data.expenseCount)],
-      ['Income Transactions', String(data.incomeCount)],
-      ['Avg. Daily Spending', pdfCurrency(data.averageDailySpending, c)],
-      ['Largest Expense', data.largestExpense
+      ['Transactions', String(data.stats.transactionCount)],
+      ['Income transactions', String(data.incomeCount)],
+      ['Expense transactions', String(data.expenseCount)],
+      ['Average daily spending', pdfCurrency(data.averageDailySpending, c)],
+      ['Largest expense', data.largestExpense
         ? `${pdfCurrency(data.largestExpense.amount, c)} — ${data.largestExpense.merchant || data.largestExpense.description || data.largestExpense.category}`
         : '—'],
     ],
   });
 
-  curY = (doc as any).lastAutoTable?.finalY || curY + 40;
+  curY = (doc as any).lastAutoTable?.finalY + 8 || curY + 40;
 
   // ---- SPENDING BY CATEGORY ----
   if (data.categories.length > 0) {
-    curY += 8;
+    if (curY > pageH - 50) { doc.addPage(); curY = 20; }
+    
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Roboto', 'bold');
     doc.setTextColor(100);
     doc.text('SPENDING BY CATEGORY', margin, curY);
     curY += 4;
@@ -134,88 +150,93 @@ export function generateFinancialStatementPdf(data: FinancialStatementData): Blo
         pdfCurrency(cat.amount, c),
         `${cat.percentage}%`,
       ]),
-      theme: 'striped',
-      headStyles: { fillColor: [55, 65, 81], fontSize: 9, fontStyle: 'bold' },
-      styles: { fontSize: 9, cellPadding: 3 },
+      theme: 'grid',
+      headStyles: { font: 'Roboto', fillColor: [240, 240, 240], textColor: [80, 80, 80], fontSize: 9, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      styles: { ...defaultStyles, fontSize: 9, cellPadding: 3, lineWidth: 0.1, lineColor: [200, 200, 200] },
       columnStyles: {
+        1: { halign: 'center' },
         2: { halign: 'right' },
         3: { halign: 'right' },
       },
     });
 
-    curY = (doc as any).lastAutoTable?.finalY || curY + 40;
+    curY = (doc as any).lastAutoTable?.finalY + 8 || curY + 40;
   }
 
   // ---- TRANSACTION DETAILS ----
-  curY += 8;
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100);
-  doc.text(`TRANSACTION DETAILS (${data.transactions.length})`, margin, curY);
-  curY += 4;
-
-  autoTable(doc, {
-    startY: curY,
-    head: [['Date', 'Description', 'Category', 'Payment', 'Amount']],
-    body: data.transactions.map(t => [
-      pdfDate(t.transaction_date),
-      (t.merchant || t.description || t.category).substring(0, 35),
-      t.category,
-      t.payment_method || '—',
-      `${t.type === 'income' ? '+' : '-'}${pdfCurrency(t.amount, c)}`,
-    ]),
-    theme: 'grid',
-    headStyles: { fillColor: [55, 65, 81], fontSize: 8, fontStyle: 'bold' },
-    styles: { fontSize: 8, cellPadding: 2.5 },
-    columnStyles: {
-      0: { cellWidth: 28 },
-      4: { halign: 'right', fontStyle: 'bold' },
-    },
-    didParseCell(hookData) {
-      if (hookData.section === 'body' && hookData.column.index === 4) {
-        const t = data.transactions[hookData.row.index];
-        if (t) {
-          hookData.cell.styles.textColor = t.type === 'income' ? [39, 174, 96] : [192, 57, 43];
-        }
-      }
-    },
-  });
-
-  curY = (doc as any).lastAutoTable?.finalY || curY + 40;
-
-  // ---- INSIGHTS ----
-  if (data.insights.length > 0) {
-    curY += 8;
-    // Check if we need a new page
-    if (curY > doc.internal.pageSize.getHeight() - 50) {
-      doc.addPage();
-      curY = 20;
-    }
+  if (data.transactions.length > 0) {
+    // Start transaction details on a new page if the current page is getting full
+    if (curY > pageH - 80) { doc.addPage(); curY = 20; }
+    
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('Roboto', 'bold');
     doc.setTextColor(100);
-    doc.text('INSIGHTS', margin, curY);
+    doc.text(`TRANSACTION DETAILS (${data.transactions.length})`, margin, curY);
+    curY += 4;
+
+    autoTable(doc, {
+      startY: curY,
+      head: [['Date', 'Description', 'Category', 'Payment', 'Amount']],
+      body: data.transactions.map(t => [
+        pdfDate(t.transaction_date),
+        (t.merchant || t.description || t.category).substring(0, 40),
+        t.category,
+        t.payment_method || '—',
+        `${t.type === 'income' ? '+' : '-'}${pdfCurrency(t.amount, c)}`,
+      ]),
+      theme: 'grid',
+      headStyles: { font: 'Roboto', fillColor: [240, 240, 240], textColor: [80, 80, 80], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      styles: { ...defaultStyles, fontSize: 8, cellPadding: 2.5, lineWidth: 0.1, lineColor: [200, 200, 200] },
+      columnStyles: {
+        0: { cellWidth: 26 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 20 },
+        4: { halign: 'right', fontStyle: 'bold', cellWidth: 26 },
+      },
+      didParseCell(hookData) {
+        if (hookData.section === 'body' && hookData.column.index === 4) {
+          const t = data.transactions[hookData.row.index];
+          if (t) {
+            // Use softer colors for printability, not dark-mode UI colors
+            hookData.cell.styles.textColor = t.type === 'income' ? [30, 110, 60] : [180, 40, 40];
+          }
+        }
+      },
+    });
+    
+    curY = (doc as any).lastAutoTable?.finalY + 8 || curY + 40;
+  }
+
+  // ---- WHAT STOOD OUT (INSIGHTS) ----
+  if (data.insights.length > 0) {
+    // Only page break if not enough space
+    if (curY > pageH - 40) { doc.addPage(); curY = 20; }
+    
+    doc.setFontSize(11);
+    doc.setFont('Roboto', 'bold');
+    doc.setTextColor(100);
+    doc.text('WHAT STOOD OUT', margin, curY);
     curY += 4;
 
     autoTable(doc, {
       startY: curY,
       theme: 'plain',
-      styles: { fontSize: 9, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
+      styles: { ...defaultStyles, fontSize: 9, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
       body: data.insights.map(i => [i.label, `${i.value}${i.detail ? ` — ${i.detail}` : ''}`]),
     });
 
-    curY = (doc as any).lastAutoTable?.finalY || curY + 40;
+    curY = (doc as any).lastAutoTable?.finalY + 8 || curY + 40;
   }
 
   // ---- FOOTER ----
   const pageCount = doc.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setFont('Roboto', 'normal');
     doc.setTextColor(150);
-    const footerY = doc.internal.pageSize.getHeight() - 8;
+    const footerY = pageH - 10;
     doc.text(`Generated by BudgetWise · All values in ${c} · For personal reference only`, margin, footerY);
     doc.text(`Page ${p} of ${pageCount}`, rightEdge, footerY, { align: 'right' });
   }

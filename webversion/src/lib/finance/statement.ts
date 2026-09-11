@@ -23,6 +23,7 @@ import {
   calculateDailySpending,
   toMoney,
 } from './calculations';
+import { formatCurrency } from '../utils';
 
 // ---- Interfaces ----
 
@@ -159,11 +160,11 @@ function calculateStatementInsights(
 
   // Highest spending category
   if (categories.length > 0) {
-    const top = categories[0]; // already sorted desc by amount
+    const top = categories[0];
     insights.push({
       label: 'Highest spending category',
       value: top.category,
-      detail: `${top.percentage}% of total expenses (${top.count} transactions)`,
+      detail: `${formatCurrency(top.amount, currency)} · ${top.percentage}% · ${top.count} transactions`,
     });
   }
 
@@ -171,10 +172,16 @@ function calculateStatementInsights(
   if (dailySpending.length > 0) {
     const topDay = [...dailySpending].sort((a, b) => b.amount - a.amount)[0];
     if (topDay.amount > 0) {
+      // Find exact transaction count for this day
+      const dayCount = transactions.filter(t => t.type === 'expense' && t.transaction_date === topDay.date).length;
+      
+      const d = new Date(topDay.date + 'T00:00:00');
+      const dateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      
       insights.push({
         label: 'Highest spending day',
-        value: topDay.date,
-        detail: `Spent on this day across expenses`,
+        value: dateStr,
+        detail: `${formatCurrency(topDay.amount, currency)} · ${dayCount} transactions`,
       });
     }
   }
@@ -182,10 +189,12 @@ function calculateStatementInsights(
   // Largest individual expense
   if (largestExpense) {
     const desc = largestExpense.merchant || largestExpense.description || largestExpense.category;
+    const d = new Date(largestExpense.transaction_date + 'T00:00:00');
+    const dateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     insights.push({
-      label: 'Largest individual expense',
+      label: 'Largest expense',
       value: desc,
-      detail: `${largestExpense.transaction_date} · ${largestExpense.category}`,
+      detail: `${dateStr} · ${formatCurrency(largestExpense.amount, currency)}`,
     });
   }
 
@@ -193,20 +202,20 @@ function calculateStatementInsights(
   const expenseDays = dailySpending.filter(d => d.amount > 0).length;
   if (daysInRange > 0) {
     insights.push({
-      label: 'Days with expenses',
-      value: `${expenseDays} of ${daysInRange}`,
-      detail: `${Math.round((expenseDays / daysInRange) * 100)}% of days in period`,
+      label: 'Expense days',
+      value: `${expenseDays} of ${daysInRange} days`,
+      detail: `${Math.round((expenseDays / daysInRange) * 100)}%`,
     });
   }
 
   // Average expense size
   const expenses = transactions.filter(t => t.type === 'expense');
   if (expenses.length > 0) {
-    const avgExpense = toMoney(stats.totalExpenses / expenses.length);
+    const avgExpense = stats.totalExpenses / expenses.length;
     insights.push({
-      label: 'Average expense size',
-      value: String(avgExpense),
-      detail: `Across ${expenses.length} expense transactions`,
+      label: 'Average expense',
+      value: formatCurrency(avgExpense, currency),
+      detail: `${expenses.length} expenses`,
     });
   }
 
@@ -214,9 +223,9 @@ function calculateStatementInsights(
   if (categories.length >= 2) {
     const topTwoPercent = toMoney(categories[0].percentage + categories[1].percentage);
     insights.push({
-      label: 'Top 2 categories',
-      value: `${categories[0].category} & ${categories[1].category}`,
-      detail: `Together account for ${topTwoPercent}% of spending`,
+      label: 'Top categories',
+      value: `${categories[0].category} + ${categories[1].category}`,
+      detail: `${topTwoPercent}% of spending`,
     });
   }
 
