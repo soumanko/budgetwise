@@ -101,20 +101,49 @@ export default function FinancialStatementPage() {
   // ---- PDF download ----
   const handleDownloadPDF = useCallback(() => {
     if (!statementData) return;
+    
+    let docBlob: Blob;
+    
+    console.log('[Diagnostic] Starting PDF generation pipeline...');
+    
     try {
-      const blob = generateFinancialStatementPdf(statementData);
-      const url = URL.createObjectURL(blob);
+      console.log('[Diagnostic] 1. Generating PDF via jsPDF...');
+      docBlob = generateFinancialStatementPdf(statementData);
+      console.log('[Diagnostic] 1. PDF generated successfully. Blob size:', docBlob.size);
+    } catch (err: any) {
+      console.error('[Diagnostic] PDF generation failed:', err);
+      console.error('[Diagnostic] Stack trace:', err.stack);
+      toast.error('Failed to generate PDF document.');
+      return;
+    }
+    
+    let url: string;
+    try {
+      console.log('[Diagnostic] 2. Creating Object URL...');
+      url = URL.createObjectURL(docBlob);
+      console.log('[Diagnostic] 2. URL created:', url);
+    } catch (err: any) {
+      console.error('[Diagnostic] URL creation failed:', err);
+      console.error('[Diagnostic] Stack trace:', err.stack);
+      toast.error('Statement generated, but failed to prepare download link.');
+      return;
+    }
+    
+    try {
+      console.log('[Diagnostic] 3. Triggering browser download...');
       const link = document.createElement('a');
       link.href = url;
       link.download = getStatementFilename(statementData.startDate, statementData.endDate);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      console.log('[Diagnostic] 3. Download triggered successfully.');
+    } catch (err: any) {
+      console.error('[Diagnostic] Browser download failed:', err);
+      console.error('[Diagnostic] Stack trace:', err.stack);
+      toast.error('Statement generated, but the download failed.');
+    } finally {
       URL.revokeObjectURL(url);
-      toast.success('PDF downloaded successfully');
-    } catch (err) {
-      console.error('PDF generation failed:', err);
-      toast.error('Failed to generate PDF. Please try again.');
     }
   }, [statementData]);
 
